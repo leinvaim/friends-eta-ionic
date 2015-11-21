@@ -1,0 +1,16 @@
+<ion-view view-title="ETAs">
+  <ion-content class="padding">
+   <ion-list>
+     <ion-item ng-repeat="friend in vm.friends">
+       {{friend.name}}
+         {{friend.eta.eta / 60 | number:0}} Minutes
+     </ion-item>
+     <ion-item ng-repeat="eta in vm.etas">
+
+     </ion-item>
+   </ion-list>
+    <ion-list>
+
+    </ion-list>
+  </ion-content>
+</ion-view>
