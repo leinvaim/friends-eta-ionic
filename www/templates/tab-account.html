@@ -1,9 +1,13 @@
 <ion-view view-title="Account">
   <ion-content>
-    <ion-list>
-    <ion-toggle  ng-model="settings.enableFriends">
-        Enable Friends
-    </ion-toggle>
-    </ion-list>
+
+    <div class="list">
+
+      <ion-radio ng-repeat="user in vm.users" ng-model="vm.chosenUser" ng-value="{{user.id}}" ng-click="vm.changeUser(user.id)">
+        {{user.name}}
+      </ion-radio>
+
+    </div>
+
   </ion-content>
 </ion-view>

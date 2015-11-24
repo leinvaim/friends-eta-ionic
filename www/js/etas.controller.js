@@ -6,46 +6,47 @@ angular
     .controller('EtasController', EtasController);
 
 /* @ngInject */
-function EtasController ($http, ENV) {
+function EtasController ($http, ENV, $ionicPlatform, $scope, $state) {
     /* jshint validthis: true */
     var vm = this;
 
     vm.activate = activate;
     vm.title = 'Etas';
+    vm.doRefresh = doRefresh;
+
+    var userId=1;
 
     activate();
 
-
+    ////////
 
     function activate() {
-
-        window.navigator.geolocation.getCurrentPosition(function(location) {
-            console.log(location);
-        });
-        if(window.BackgroundGeolocation){
+        if(window.localStorage['userId']){
+            userId = window.localStorage['userId'];
+        }
+        else{
+            $state.go('tab.account');
+        }
+        console.log(window.BackgroundGeolocation);
+       if(window.BackgroundGeolocation) {
+            // Get a reference to the plugin.
             var bgGeo = window.BackgroundGeolocation;
-            /**
-             * This would be your own callback for Ajax-requests after POSTing background geolocation to your server.
-             */
-            var yourAjaxCallback = function(response) {
-                ////
-                // IMPORTANT:  You must execute the #finish method here to inform the native plugin that you're finished,
-                //  and the background-task may be completed.  You must do this regardless if your HTTP request is successful or not.
-                // IF YOU DON'T, ios will CRASH YOUR APP for spending too much time in the background.
-                //
-                //
-                bgGeo.finish();
-            };
 
             /**
              * This callback will be executed every time a geolocation is recorded in the background.
              */
-            var callbackFn = function(location) {
-                console.log('[js] BackgroundGeoLocation callback:  ' + location.latitude + ',' + location.longitude);
-                // Do your HTTP request here to POST location to your server.
-                //
-                //
-                yourAjaxCallback.call(this);
+            var callbackFn = function(location, taskId) {
+                console.log('getting coordinate');
+                var coords = location.coords;
+                var lat    = coords.latitude;
+                var long    = coords.longitude;
+                $http.post(ENV.apiEndpoint + 'locations', {'user_id': userId, 'lat': lat, 'long': long});
+                //console.log(coords);
+                // Simulate doing some extra work with a bogus setTimeout.  This could perhaps be an Ajax request to your server.
+                // The point here is that you must execute bgGeo.finish after all asynchronous operations within the callback are complete.
+                setTimeout(function() {
+                    bgGeo.finish(taskId); // <-- execute #finish when your work in callbackFn is complete
+                }, 1000);
             };
 
             var failureFn = function(error) {
@@ -54,22 +55,39 @@ function EtasController ($http, ENV) {
 
             // BackgroundGeoLocation is highly configurable.
             bgGeo.configure(callbackFn, failureFn, {
-                url: 'http://only.for.android.com/update_location.json', // <-- Android ONLY:  your server url to send locations to
-                params: {
-                    auth_token: 'user_secret_auth_token',    //  <-- Android ONLY:  HTTP POST params sent to your server when persisting locations.
-                    foo: 'bar'                              //  <-- Android ONLY:  HTTP POST params sent to your server when persisting locations.
-                },
-                headers: {                                   // <-- Android ONLY:  Optional HTTP headers sent to your configured #url when persisting locations
-                    "X-Foo": "BAR"
-                },
-                desiredAccuracy: 10,
-                stationaryRadius: 20,
-                distanceFilter: 30,
-                notificationTitle: 'Background tracking', // <-- android only, customize the title of the notification
-                notificationText: 'ENABLED', // <-- android only, customize the text of the notification
+                // Geolocation config
+                desiredAccuracy: 0,
+                stationaryRadius: 50,
+                distanceFilter: 50,
+                disableElasticity: false, // <-- [iOS] Default is 'false'.  Set true to disable speed-based distanceFilter elasticity
+                locationUpdateInterval: 5000,
+                minimumActivityRecognitionConfidence: 80,   // 0-100%.  Minimum activity-confidence for a state-change
+                fastestLocationUpdateInterval: 5000,
+                activityRecognitionInterval: 10000,
+                stopDetectionDelay: 1,  // Wait x minutes to engage stop-detection system
+                stopTimeout: 2,  // Wait x miutes to turn off location system after stop-detection
                 activityType: 'AutomotiveNavigation',
+
+                // Application config
                 debug: true, // <-- enable this hear sounds for background-geolocation life-cycle.
-                stopOnTerminate: false // <-- enable this to clear background location settings when the app terminates
+                forceReloadOnLocationChange: false,  // <-- [Android] If the user closes the app **while location-tracking is started** , reboot app when a new location is recorded (WARNING: possibly distruptive to user)
+                forceReloadOnMotionChange: false,    // <-- [Android] If the user closes the app **while location-tracking is started** , reboot app when device changes stationary-state (stationary->moving or vice-versa) --WARNING: possibly distruptive to user)
+                forceReloadOnGeofence: false,        // <-- [Android] If the user closes the app **while location-tracking is started** , reboot app when a geofence crossing occurs --WARNING: possibly distruptive to user)
+                stopOnTerminate: false,              // <-- [Android] Allow the background-service to run headless when user closes the app.
+                startOnBoot: true,                   // <-- [Android] Auto start background-service in headless mode when device is powered-up.
+
+                // HTTP / SQLite config
+                url: 'http://posttestserver.com/post.php?dir=cordova-background-geolocation',
+                method: 'POST',
+                batchSync: true,       // <-- [Default: false] Set true to sync locations to server in a single HTTP request.
+                autoSync: true,         // <-- [Default: true] Set true to sync each location to server as it arrives.
+                maxDaysToPersist: 1,    // <-- Maximum days to persist a location in plugin's SQLite database when HTTP fails
+                headers: {
+                    "X-FOO": "bar"
+                },
+                params: {
+                    "auth_token": "maybe_your_server_authenticates_via_token_YES?"
+                }
             });
 
             // Turn ON the background-geolocation system.  The user will be tracked whenever they suspend the app.
@@ -77,31 +95,55 @@ function EtasController ($http, ENV) {
 
             // If you wish to turn OFF background-tracking, call the #stop method.
             // bgGeo.stop()
-
-
         }
 
 
 
-        $http.get(ENV.apiEndpoint + 'users').then(function(response) {
-            vm.friends = response.data;
-            $http.post(ENV.apiEndpoint + 'locations', {'user_id': 1, 'lat': -27.471011, 'long': 153.023449}).then(function(){
-                $http.get(ENV.apiEndpoint + 'users/1/etas').then(function(response){
-                    vm.etas = response.data;
-                    console.log(vm.etas);
-                    vm.friends = _.map(vm.friends, function(friend){
-                        friend.eta = _.find(vm.etas, {user_id: friend.id});
-                        return friend;
-                    });
-                    console.log(vm.friends);
-                });
-            });
+        $ionicPlatform.ready(function() {
+            getEtas(userId);
         });
 
 
-
-
     }
+
+    function getEtas(userId) {
+        navigator.geolocation.getCurrentPosition(onSuccess, onError);
+
+        function onSuccess (position) {
+            var firstLat = position.coords.latitude;
+            var firstLong = position.coords.longitude;
+            $http.get(ENV.apiEndpoint + 'users').then(function(response) {
+                vm.friends = response.data;
+                $http.post(ENV.apiEndpoint + 'locations', {'user_id': userId, 'lat': firstLat, 'long': firstLong}).then(function(){
+                    $http.get(ENV.apiEndpoint + 'users/'+ userId + '/etas').then(function(response){
+                        vm.etas = response.data;
+                        console.log(vm.etas);
+                        vm.friends = _.map(vm.friends, function(friend){
+                            friend.eta = _.find(vm.etas, {user_id: friend.id});
+                            return friend;
+                        });
+                        $scope.$broadcast('scroll.refreshComplete');
+                        console.log(vm.friends);
+                    });
+                });
+            });
+        }
+
+        // onError Callback receives a PositionError object
+        //
+        function onError(error) {
+            alert('code: '    + error.code    + '\n' +
+                'message: ' + error.message + '\n');
+        }
+    }
+
+
+    function doRefresh() {
+        userId = window.localStorage['userId'];
+        console.log('Refresh locations');
+        getEtas(userId);
+    }
+
 }
 
 })();
